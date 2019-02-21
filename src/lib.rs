@@ -16,7 +16,7 @@ use std::sync::mpsc;
 use std::sync::Mutex;
 use std::thread;
 use xplm::data::borrowed::DataRef;
-use xplm::data::DataRead;
+use xplm::data::{ArrayRead, DataRead};
 use xplm::plugin::Plugin as XPlanePlugin;
 
 macro_rules! gauge {
@@ -60,37 +60,49 @@ impl std::fmt::Display for PluginError {
 
 #[derive(Copy, Clone, Debug, Default, Serialize)]
 pub struct Data {
+    /// Flight gauges.
     pub airspeed: f32,
     pub altitude: f32,
     pub heading: f32,
     pub vertical_speed: f32,
     pub turn: f32,
     pub slip: f32,
-
+    /// Engine gauges.
     pub rpm: f32,
     pub fuel_flow: f32,
     pub manifold_pressure: f32,
     pub egt: f32,
 }
 
-fn find(name: &str) -> f32 {
+fn read_flight_gauge(name: &str) -> f32 {
     DataRef::find(name)
         .ok()
-        .map_or(0.0, |data| data.get())
+        .map_or(0.0, |data_ref| DataRead::get(&data_ref))
+}
+
+fn read_engine_gauge(name: &str) -> f32 {
+    if let Some(data_ref) = DataRef::<[f32]>::find(name).ok() {
+        let mut data = [0.0f32; 8];
+        ArrayRead::get(&data_ref, &mut data);
+        data[0]
+    } else {
+        0.0
+    }
 }
 
 fn poll() -> Data {
     Data {
-        airspeed: find(AIRSPEED),
-        altitude: find(ALTITUDE),
-        heading: find(HEADING),
-        vertical_speed: find(VERTICAL_SPEED),
-        turn: find(TURN),
-        slip: find(SLIP),
-        rpm: find(PROPELLER_SPEED),
-        fuel_flow: find(FUEL_FLOW),
-        manifold_pressure: find(MANIFOLD_PRESSURE),
-        egt: find(EXHAUST_TEMPERATURE),
+        airspeed: read_flight_gauge(AIRSPEED),
+        altitude: read_flight_gauge(ALTITUDE),
+        heading: read_flight_gauge(HEADING),
+        vertical_speed: read_flight_gauge(VERTICAL_SPEED),
+        turn: read_flight_gauge(TURN),
+        slip: read_flight_gauge(SLIP),
+
+        rpm: read_engine_gauge(PROPELLER_SPEED),
+        fuel_flow: read_engine_gauge(FUEL_FLOW),
+        manifold_pressure: read_engine_gauge(MANIFOLD_PRESSURE),
+        egt: read_engine_gauge(EXHAUST_TEMPERATURE),
     }
 }
 
